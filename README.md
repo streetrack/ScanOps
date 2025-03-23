@@ -1,3 +1,4 @@
+![CI](https://github.com/<your-username>/scanops/actions/workflows/pipeline.yaml/badge.svg)
 ![scanops](https://i.imgur.com/tcFhk5o.png)
 
 ## Project Overview
@@ -68,7 +69,7 @@ cp vars.yaml.example vars.yaml
 vim vars.yaml
 ```
 > - Update the values in `vars.yaml` with your actual AWS and Slack credentials
-> - Keep the sensitive file local. Be sure it's listed in `.gitignore` to avoid commiting sensitive info.
+> - Keep the sensitive file local. Be sure it's listed in `.gitignore` to avoid committing sensitive info.
 <br>
 
 **Configure GitHub Secrets for `CI/CD`**: 
@@ -273,6 +274,6 @@ This kicks off:
 
 ## Conclusion
 
-ScanOps automates end-to-end container security as part of a modern **(CI/CD)** workflow. Leveraging GitHub Actions, Trivy, and AWS services it ensures only vulnerability-free images are promoted to production, while others are quarantined with detailed SBOMs and scan results stored in S3 and alerts sent via Slack.
+ScanOps automates end-to-end container security as part of a modern **(CI/CD)** workflow. Leveraging GitHub Actions, Trivy, and AWS services, it ensures only vulnerability-free images are promoted to production, while others are quarantined with detailed SBOMs and scan results stored in S3 and alerts sent via Slack.
 
 > Note: Run `cleanup.yaml` playbook to delete all AWS resources
