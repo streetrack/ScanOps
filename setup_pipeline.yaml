@@ -1,0 +1,18 @@
+---
+- name: create github action pipeline
+  hosts: localhost
+  tasks:
+  - name: create workflow directory
+    file:
+      path: ./.github/workflows/
+      owner: root
+      group: root
+      mode: '0755'
+      state: directory
+  - name: generate workflow pipeline from template
+    template:
+      src: ./pipeline.j2
+      dest: ./.github/workflows/pipeline.yaml
+      owner: root
+      group: root
+      mode: '0644'

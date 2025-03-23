@@ -1,0 +1,9 @@
+---
+aws_account_id: "<your-aws-account-id>"
+aws_access_key_id: "<your-access-key-id>"
+aws_secret_access_key: "<your-secret-access-key>"
+defaultregion: "us-east-1"
+project_name: "scanops"
+s3_bucket: "scanops-s3"
+slack_webhook_url: "<your-webhook-url>"
+

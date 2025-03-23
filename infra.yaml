@@ -1,0 +1,80 @@
+---
+- name: environment setup
+  hosts: localhost
+  vars_files: vars.yaml
+  tasks:
+  - name: install system packages
+    yum:
+      name: "{{ item }}"
+      state: latest
+    loop:
+      - python3
+      - python3-pip
+      - unzip
+      - yum-utils
+      - podman-docker
+
+  - name: upgrade ansible-core
+    shell: "python3 -m pip install --upgrade ansible-core"
+
+  - name: install Python dependencies
+    pip:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - boto3==1.28.0
+      - botocore==1.31.0
+      - requests==2.28.2
+      - flask==3.1.0
+
+  - name: check if AWS CLI is installed
+    command: "which aws"
+    register: aws_cli_check
+    ignore_errors: true
+
+  - name: download and unzip AWS CLI
+    unarchive:
+      src: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+      dest: ../
+      remote_src: yes
+    when: aws_cli_check.rc != 0
+
+  - name: install AWS CLI and configure credentials
+    shell: "{{ item }}"
+    loop:
+      - 'sudo ../aws/install'
+      - 'aws configure set aws_access_key_id {{ aws_access_key_id }}'
+      - 'aws configure set aws_secret_access_key {{ aws_secret_access_key }}'
+      - 'aws configure set default.region {{ defaultregion }}'
+    when: aws_cli_check.rc != 0
+  tags: env
+
+- name: create ECR repos
+  hosts: localhost
+  vars_files: vars.yaml
+  gather_facts: false
+  tasks:
+  - name: Create AWS ECR repositories
+    community.aws.ecs_ecr:
+      name: "{{ item }}"
+    loop:
+      - docker-dev
+      - docker-prod
+      - docker-quarantine
+
+  - name: authenticate with AWS ECR
+    shell: "aws ecr get-login-password --region {{ defaultregion }} | docker login --username AWS --password-stdin {{ aws_account_id }}.dkr.ecr.{{ defaultregion }}.amazonaws.com"
+
+  - name: Pause for 5 seconds
+    pause:
+      seconds: 5
+
+- name: setup s3 bucket
+  hosts: localhost
+  gather_facts: false
+  vars_files: vars.yaml
+  tasks: 
+  - name: create s3 bucket
+    amazon.aws.s3_bucket:
+      name: "{{ s3_bucket }}"
+      state: present

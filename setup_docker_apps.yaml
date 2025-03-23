@@ -1,0 +1,75 @@
+---
+- name: Setup Docker Application Directories
+  hosts: localhost
+  tasks:
+    - name: Create Docker application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "./docker/nginx"
+        - "./docker/nginx/app"
+        - "./docker/nginx/config"
+        - "./docker/alpine"
+        - "./docker/alpine/app"
+        - "./docker/alpine/config"
+        - "./docker/nodejs"
+        - "./docker/nodejs/app"
+        - "./docker/nodejs/config"
+        - "./docker/python"
+        - "./docker/python/app"
+        - "./docker/python/config"
+
+    - name: Create Dockerfile for Nginx 1.26.3
+      copy:
+        dest: "./docker/nginx/Dockerfile"
+        content: |
+          FROM nginx:1.26.3
+          WORKDIR /usr/share/nginx/html
+          COPY app/ . 
+          COPY config/nginx.conf /etc/nginx/nginx.conf
+          CMD ["nginx", "-g", "daemon off;"]
+
+    - name: Create Dockerfile for Alpine 3.16
+      copy:
+        dest: "./docker/alpine/Dockerfile"
+        content: |
+          FROM alpine:3.16.0
+          WORKDIR /app
+          COPY app/ .
+          CMD ["sleep", "3600"]
+
+    - name: Create Dockerfile for Node.js 14 app
+      copy:
+        dest: "./docker/nodejs/Dockerfile"
+        content: |
+          FROM node:20.14.0-bullseye
+          WORKDIR /app
+          COPY app/ .
+          RUN npm install
+          CMD ["node", "server.js"]
+
+    - name: Create Dockerfile for Python Flask app
+      copy:
+        dest: "./docker/python/Dockerfile"
+        content: |
+          FROM python:3.11.10
+          WORKDIR /app
+          COPY requirements.txt app/ /app/
+          RUN pip install --no-cache-dir -r requirements.txt
+          CMD ["python", "app.py"]
+
+    - name: Create placeholder app files
+      copy:
+        dest: "{{ item.path }}"
+        content: "{{ item.content }}"
+      loop:
+        - { path: "./docker/nginx/app/index.html", content: "<h1>My Nginx Web App</h1>" }
+        - { path: "./docker/nginx/config/nginx.conf", content: "worker_processes auto;" }
+        - { path: "./docker/alpine/app/main.sh", content: "#!/bin/sh\necho 'Alpine Test App'" }
+        - { path: "./docker/nodejs/app/server.js", content: "const http = require('http'); const port = 3000; http.createServer((req, res) => { res.end('Node.js App'); }).listen(port);" }
+        - { path: "./docker/nodejs/app/package.json", content: '{ "name": "nodeapp", "version": "1.0.0", "main": "server.js" }' }
+        - { path: "./docker/python/requirements.txt", content: "Flask==2.2.5\nrequests==2.31.0" }
+        - { path: "./docker/python/app/app.py", content: "from flask import Flask\napp = Flask(__name__)\n@app.route('/')\ndef hello(): return 'Python App'\napp.run(host='0.0.0.0', port=5000)" }
+

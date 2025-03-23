@@ -1,0 +1,7 @@
+Collections
+Roles
+__pycache__/
+node_modules/
+*.pyc
+*.log
+vars.yaml
