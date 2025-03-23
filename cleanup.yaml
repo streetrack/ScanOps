@@ -1,0 +1,21 @@
+---
+- name: cleanup aws resources
+  hosts: localhost
+  vars_files:
+    - vars.yaml
+  tasks:
+
+  - name: Delete bucket
+    amazon.aws.s3_bucket:
+      name: "{{ s3_bucket }}" 
+      state: absent
+      force: true
+  - name: destroy-ecr-repo
+    community.aws.ecs_ecr:
+      name: "{{ item }}"
+      state: absent
+      force_absent: true
+    loop:
+      - 'docker-dev'
+      - 'docker-prod'
+      - 'docker-quarantine'

@@ -84,7 +84,14 @@ vim vars.yaml
 > - Click Settings → Secrets and variables → Actions
 > - Click "New repository secret" and enter the name and value
 
-These secrets are accessed by the GitHub Actions workflow to authenticate with AWS and send alerts to Slack
+<details close>
+  <summary> <h4>Image Results</h4> </summary>
+    
+![scanops](https://i.imgur.com/fk2TFSC.png)
+
+  - **These secrets are accessed by the GitHub Actions workflow to authenticate with AWS and send alerts to Slack**
+<br><br>
+</details>
 
 ### Run Ansible setup playbook
 ```bash
@@ -110,11 +117,27 @@ aws s3 ls
 <details close>
   <summary> <h4>Image Results</h4> </summary>
     
-![CVEDataLake](https://i.imgur.com/idwIvVZ.png)
+![scanops](https://i.imgur.com/NDC24VN.png) 
+![scanops](https://i.imgur.com/hVgJwLa.png) 
+![scanops](https://i.imgur.com/rFx1Ecg.png) 
 
-  - **List S3**: Bucket contains results under athena-results/, including .csv and .csv.metadata files
-  - **List local directory**: Confirmed `~/CVEDataLake/query_results/` has multiple JSON query result files
-  - **Examine JSON file**: Results confirm properly formatted structured JSON data
+  - **AWS CLI Configuration**:
+    - AWS credentials are set up using a shared credentials file, and the region is configured as us-east-1
+    - The IAM user is verified via sts get-caller-identity, confirming its UserId, Account, and ARN
+  - **Output confirms the three ECR repos are created**:
+    - `docker-dev`
+    - `docker-prod`
+    - `docker-quarantine`
+  - **Verifies successful provisioning of S3 storage**
+<br><br>
+
+![scanops](https://i.imgur.com/tmSbOyS.png) 
+![scanops](https://i.imgur.com/Wv76N7z.png) 
+
+  - **Confirmed in AWS web console**:
+    - All three repositories created
+    - S3 storage provisioned
+<br><br>
 </details>
 
 ## Deployment
@@ -142,12 +165,15 @@ cat docker/python/Dockerfile
 <details close>
   <summary> <h4>Image Results</h4> </summary>
     
-![CVEDataLake](https://i.imgur.com/idwIvVZ.png)
-![CVEDataLake](https://i.imgur.com/fWI7OLO.png)
+![scanops](https://i.imgur.com/I8LUEGX.png) 
 
-  - **List S3**: Bucket contains results under athena-results/, including .csv and .csv.metadata files
-  - **List local directory**: Confirmed `~/CVEDataLake/query_results/` has multiple JSON query result files
-  - **Examine JSON file**: Results confirm properly formatted structured JSON data
+  - **Output of sample Dockerfile creation from `setup_docker_apps.yaml` playbook**
+  - **Confirmed four Docker apps**:
+    - Alpine
+    - Nginx
+    - Python
+    - Node.js
+<br><br>
 </details>
 
 ### Deploy GitHub Actions Workflow
@@ -199,21 +225,54 @@ This kicks off:
 <details close>
   <summary> <h4>Image Results</h4> </summary>
     
-![CVEDataLake](https://i.imgur.com/idwIvVZ.png)
-![CVEDataLake](https://i.imgur.com/fWI7OLO.png)
+![scanops](https://i.imgur.com/AWvYfDb.png) 
+  - **Matrix strategy kicks off 4 parallel build-and-push jobs**:
+    - alpine
+    - nginx
+    - python
+    - nodejs
+  - **Scan-move matrix is queued then completes build jobs with no errors**
+<br><br>
 
-  - **List S3**: Bucket contains results under athena-results/, including .csv and .csv.metadata files
-  - **List local directory**: Confirmed `~/CVEDataLake/query_results/` has multiple JSON query result files
-  - **Examine JSON file**: Results confirm properly formatted structured JSON data
+![scanops](https://i.imgur.com/DKCPWxa.png) 
+  - **SBOMs for all four sample apps were successfully generated and uploaded to the `scanops-s3` bucket**
+<br><br>
+
+![scanops](https://i.imgur.com/fCFsuBF.png)
+  - **Trivy scan results were also successfully uploaded to the `scanops-s3` bucket** 
+<br><br>
+
+![scanops](https://i.imgur.com/6FNeXAA.png)
+  - **Trivy scan for the `nginx` image returned 0 vulnerabilities, marking it as clean**
+<br><br>
+
+![scanops](https://i.imgur.com/rwejnA2.png)
+  - **Scan for the `nodejs` image detected 374 total vulnerabilities, including 22 CRITICAL and 352 HIGH severity issues**
+<br><br>
+
+![scanops](https://i.imgur.com/Sd6V77g.png)
+  - **Trivy scan for the `alpine` image found 11 vulnerabilities, including 1 CRITICAL and 10 HIGH severity**
+<br><br>
+
+![scanops](https://i.imgur.com/SqWLHIS.png)
+  - **The `python` image scan revealed 129 total vulnerabilities, with 1 marked CRITICAL and 128 categorized as HIGH severity**
+<br><br>
+
+![scanops](https://i.imgur.com/sVAqNVv.png)
+  - **The `nginx` image passed the Trivy scan and was successfully promoted to the `docker-prod` ECR repository**
+<br><br>
+
+![scanops](https://i.imgur.com/nysAYkU.png)
+  - **The `python`, `nodejs`, and `alpine` images were pushed to the `docker-quarantine` ECR repository for isolation**
+<br><br>
+
+![scanops](https://i.imgur.com/hemgDJf.png)
+  - **Slack alert triggered by ScanOps, reporting vulnerability summaries for `alpine`, `nodejs`, and `python` images**
+<br><br>
 </details>
 
 ## Conclusion
 
-ScanOps automates end-to-end container security as part of a modern **(CI/CD)** workflow. With GitHub Actions, AWS, and Trivy at its core, this project ensures secure container delivery, real-time alerting, and compliance reporting through SBOMs—all orchestrated with Ansible.
+ScanOps automates end-to-end container security as part of a modern **(CI/CD)** workflow. Leveraging GitHub Actions, Trivy, and AWS services it ensures only vulnerability-free images are promoted to production, while others are quarantined with detailed SBOMs and scan results stored in S3 and alerts sent via Slack.
 
-This project can easily be extended to:
-- Include GitHub OIDC integration for secure AWS access
-- Integrate with AWS Glue & Athena for queryable vulnerability analytics
-- Expand Slack notifications with richer summaries or visuals
-
-> Note: Run `cleanup.sh` to delete all resources
+> Note: Run `cleanup.yaml` playbook to delete all AWS resources
