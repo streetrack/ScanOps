@@ -111,7 +111,6 @@ aws s3 ls
   <summary> <h4>Image Results</h4> </summary>
     
 ![CVEDataLake](https://i.imgur.com/idwIvVZ.png)
-![CVEDataLake](https://i.imgur.com/fWI7OLO.png)
 
   - **List S3**: Bucket contains results under athena-results/, including .csv and .csv.metadata files
   - **List local directory**: Confirmed `~/CVEDataLake/query_results/` has multiple JSON query result files
