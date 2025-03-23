@@ -36,7 +36,7 @@ GitHub Actions
 ## Prerequisites
 
 - **Rocky Linux VM**
-  - Fresh installation of Rocky Linux
+  - Rocky Linux with `Ansible` and `Git` installed
   - Allocate sufficient resources: **2 CPUs, 4GB RAM**
 - **AWS Account**
   - An AWS account with provisioned access-key and secret-key
@@ -54,10 +54,11 @@ GitHub Actions
 ### Fork this repository
 > 🔁 Click the “Fork” button on the top-right of the GitHub repo page to copy it to your own GitHub account. This ensures that GitHub Actions will run under your account and can access your secrets.
 
-### Clone your forked repo
+### Clone repo and install required Ansible collections
 ```bash
 git clone git@github.com:<your-github-username>/scanops.git
 cd scanops
+ansible-galaxy install -r requirements.yaml
 ```
 
 ### Configure Variables and Repo Secrets
