@@ -52,24 +52,38 @@ GitHub Actions
 ## Environment Setup
 
 ### Fork this repository
-
 > 🔁 Click the “Fork” button on the top-right of the GitHub repo page to copy it to your own GitHub account. This ensures that GitHub Actions will run under your account and can access your secrets.
 
-### Clone your forked repo and install required ansible collections
+### Clone your forked repo
 ```bash
-git clone https://github.com/<your-github-username>/scanops.git
+git clone git@github.com:<your-github-username>/scanops.git
 cd scanops
-ansible-galaxy install -r requirements.yaml
 ```
 
-### Configure Variables
-Copy the example `vars.yaml` file and update your AWS/Slack credentials:
+### Configure Variables and Repo Secrets
+**Update variable file for Ansible playbook runs**:
 ```bash
 cp vars.yaml.example vars.yaml
 vim vars.yaml
 ```
-> Note: Keep the sensitive file local. Add to `.gitignore` if uploading to GitHub
+> - Update the values in `vars.yaml` with your actual AWS and Slack credentials
+> - Keep the sensitive file local. Be sure it's listed in `.gitignore` to avoid commiting sensitive info.
 <br>
+
+**Configure GitHub Secrets for `CI/CD`**: 
+| Secret Name           | Description                     |
+|-----------------------|---------------------------------|
+| AWS_ACCOUNT_ID        | Your AWS account ID             |
+| AWS_ACCESS_KEY_ID     | IAM access key ID               |
+| AWS_SECRET_ACCESS_KEY | IAM secret access key           |
+| AWS_REGION            | AWS region (e.g., `us-east-1`)  |
+| SLACK_WEBHOOK_URL     | Slack webhook for notifications |
+> To add these:
+> - Go to your repository on GitHub
+> - Click Settings → Secrets and variables → Actions
+> - Click "New repository secret" and enter the name and value
+
+These secrets are accessed by the GitHub Actions workflow to authenticate with AWS and send alerts to Slack
 
 ### Run Ansible setup playbook
 ```bash
@@ -88,7 +102,7 @@ ansible --version
 podman --version
 aws configure list
 aws sts get-caller-identity
-aws ecr describe-repositories
+aws ecr describe-repositories --no-cli-pager
 aws s3 ls
 ```
 
