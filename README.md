@@ -1,4 +1,3 @@
-![CI](https://github.com/<your-username>/scanops/actions/workflows/pipeline.yaml/badge.svg)
 ![scanops](https://i.imgur.com/tcFhk5o.png)
 
 ## Project Overview
