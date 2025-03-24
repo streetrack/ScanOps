@@ -1,4 +1,4 @@
-FROM nginx:1.26.3
+FROM nginx
 WORKDIR /usr/share/nginx/html
 COPY app/ . 
 COPY config/nginx.conf /etc/nginx/nginx.conf
