@@ -1,0 +1,136 @@
+
+name: ScanOps Security Pipeline
+
+on:
+  push:
+    paths:
+      - "docker/**"
+  pull_request:
+    paths:
+      - "docker/**"
+
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image_name: ["alpine", "nginx", "python", "nodejs"]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Configure AWS Credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region ${{ secrets.AWS_REGION }}
+      - name: Login to AWS ECR with Docker
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      - name: Set Image Tag Dynamically
+        run: |
+          TIMESTAMP=$(date +%F-%H%M%S)
+          IMAGE_TAG="${{ matrix.image_name }}-${TIMESTAMP}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ matrix.image_name }}" >> $GITHUB_ENV
+          echo "${IMAGE_TAG}" > /tmp/image_tag_${{ matrix.image_name }}.txt
+      - name: Upload Image Tag as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag-${{ matrix.image_name }}
+          path: /tmp/image_tag_${{ matrix.image_name }}.txt
+      - name: Build Image with Docker
+        run: |
+          docker build -t $IMAGE_TAG -f docker/${{ matrix.image_name }}/Dockerfile docker/${{ matrix.image_name }}/
+      - name: Tag and Push Image to `docker-dev`
+        run: |
+          docker tag $IMAGE_TAG ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/docker-dev:$IMAGE_TAG
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/docker-dev:$IMAGE_TAG
+
+  scan-move:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image_name: ["alpine", "nginx", "python", "nodejs"]
+    steps:
+      - name: Download Image Tag Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag-${{ matrix.image_name }}
+          path: /tmp/
+      - name: Load Image Tag into Environment
+        run: |
+          echo "IMAGE_TAG=$(cat /tmp/image_tag_${{ matrix.image_name }}.txt)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region ${{ secrets.AWS_REGION }}
+      - name: Login to AWS ECR with Docker
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      - name: Install Trivy Vulnerability Scanner
+        run: |
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.60.0/trivy_0.60.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.60.0_Linux-64bit.deb
+          trivy --version
+      - name: Run Trivy Vulnerability Scanner
+        continue-on-error: true
+        run: |
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/docker-dev:${{ env.IMAGE_TAG }}"
+          echo "🔍 Scanning image: $IMAGE_URI"
+
+          trivy image --format table --ignore-unfixed --severity CRITICAL,HIGH -o results-${{ env.IMAGE_TAG }}.json $IMAGE_URI
+
+      - name: Generate SBOM for Image
+        run: |
+          trivy image --format cyclonedx -o sbom-${{ env.IMAGE_TAG }}.json ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/docker-dev:${{ env.IMAGE_TAG }}
+
+      - name: Upload SBOM to S3
+        run: |
+          aws s3 cp sbom-${{ env.IMAGE_TAG }}.json s3://scanops-s3/sboms/
+          aws s3 cp results-${{ env.IMAGE_TAG }}.json s3://scanops-s3/scans/
+      - name: Move Image Based on Scan Result
+        run: |
+          RESULTS_FILE="results-${{ env.IMAGE_TAG }}.json"
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+          SUMMARY=""
+          PREV_LINE=""
+          PREV2_LINE=""
+
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^Total: ]]; then
+              TARGET=$(echo "$PREV2_LINE" | sed 's/^[[:space:]]*//')
+              SUMMARY+="- *Target:* $TARGET\n  $line\n"
+            fi
+            PREV2_LINE="$PREV_LINE"
+            PREV_LINE="$line"
+          done < "$RESULTS_FILE"
+
+          SLACK_SUMMARY=$(echo -e "$SUMMARY" | sed ':a;N;$!ba;s/\n/\\n/g')
+
+
+          cat $RESULTS_FILE
+          if grep -qE 'CRITICAL|HIGH' "$RESULTS_FILE"; then
+            echo "⚠️ Vulnerabilities found! Moving image to docker-quarantine."
+            docker pull $IMAGE_URI/docker-dev:$IMAGE_TAG
+            docker tag $IMAGE_URI/docker-dev:$IMAGE_TAG $IMAGE_URI/docker-quarantine:$IMAGE_TAG
+            docker push $IMAGE_URI/docker-quarantine:$IMAGE_TAG
+            aws ecr batch-delete-image --repository-name docker-dev --image-ids imageTag=$IMAGE_TAG
+            curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"🚨 *Vulnerabilities found in latest scan!*\n\nImage: $IMAGE_TAG\n$SLACK_SUMMARY\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
+          else
+            echo "✅ No CRITICAL/HIGH vulnerabilities found. Moving image to docker-prod."
+            docker pull $IMAGE_URI/docker-dev:$IMAGE_TAG
+            docker tag $IMAGE_URI/docker-dev:$IMAGE_TAG $IMAGE_URI/docker-prod:$IMAGE_TAG
+            docker push $IMAGE_URI/docker-prod:$IMAGE_TAG
+            aws ecr batch-delete-image --repository-name docker-dev --image-ids imageTag=$IMAGE_TAG
+          fi
