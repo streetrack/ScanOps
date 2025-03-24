@@ -1,4 +1,5 @@
-![scanops](https://i.imgur.com/tcFhk5o.png)
+# ScanOps
+![scanops](https://i.imgur.com/9KP3bpP.png)
 
 ## Project Overview
 
